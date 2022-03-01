@@ -17,6 +17,7 @@ Copyright 2012 Artem Stasuk
 package com.github.terma.javaniotcpproxy;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
@@ -44,7 +45,8 @@ class TcpProxyBuffer {
 
     public void writeFrom(SocketChannel channel) throws IOException {
         int read = channel.read(buffer);
-        if (read == -1) throw new ClosedChannelException();
+        if (read == -1)
+            throw new ClosedChannelException();
 
         if (read > 0) {
             buffer.flip();
@@ -53,9 +55,9 @@ class TcpProxyBuffer {
     }
 
     /**
-     * This method try to write data from buffer to channel.
-     * Buffer changes state to READY_TO_READ only if all data were wrote to channel,
-     * in other case you should call this method again
+     * This method try to write data from buffer to channel. Buffer changes state to
+     * READY_TO_READ only if all data were wrote to channel, in other case you
+     * should call this method again
      *
      * @param channel - channel
      * @throws IOException
@@ -70,4 +72,11 @@ class TcpProxyBuffer {
         }
     }
 
+    public void copyTo(OutputStream out) throws IOException {
+        if (out == null || buffer.remaining() <= 0)
+            return;
+        byte[] data = new byte[buffer.remaining()];
+        buffer.duplicate().get(data);
+        out.write(data);
+    }
 }

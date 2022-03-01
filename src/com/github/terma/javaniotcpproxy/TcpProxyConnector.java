@@ -16,9 +16,11 @@ Copyright 2012 Artem Stasuk
 
 package com.github.terma.javaniotcpproxy;
 
-import com.github.terma.javaniotcpserver.TcpServerHandler;
-
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
@@ -27,6 +29,8 @@ import java.nio.channels.SocketChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.github.terma.javaniotcpserver.TcpServerHandler;
+
 class TcpProxyConnector implements TcpServerHandler {
 
     private final static Logger LOGGER = Logger.getAnonymousLogger();
@@ -34,6 +38,7 @@ class TcpProxyConnector implements TcpServerHandler {
     private final TcpProxyBuffer clientBuffer = new TcpProxyBuffer();
     private final TcpProxyBuffer serverBuffer = new TcpProxyBuffer();
     private final SocketChannel clientChannel;
+    private OutputStream requestLog, responseLog;
 
     private Selector selector;
     private SocketChannel serverChannel;
@@ -42,41 +47,62 @@ class TcpProxyConnector implements TcpServerHandler {
     public TcpProxyConnector(SocketChannel clientChannel, TcpProxyConfig config) {
         this.clientChannel = clientChannel;
         this.config = config;
+
+        String logPath = config.getLogPath();
+        if (logPath == null)
+            return;
+
+        File logs = new File(logPath).getAbsoluteFile();
+        long now = System.currentTimeMillis();
+        int clientId = System.identityHashCode(clientChannel);
+
+        this.requestLog = config.logRequest() ? getLog(new File(logs, String.format("%d-%d-req", now, clientId))) : null;
+        this.responseLog = config.logResponse() ? getLog(new File(logs, String.format("%d-%d-resp", now, clientId))) : null;
     }
 
     public void readFromClient() throws IOException {
         serverBuffer.writeFrom(clientChannel);
-        if (serverBuffer.isReadyToRead()) register();
+        if (serverBuffer.isReadyToRead())
+            register();
     }
 
     public void readFromServer() throws IOException {
         clientBuffer.writeFrom(serverChannel);
-        if (clientBuffer.isReadyToRead()) register();
+        if (clientBuffer.isReadyToRead())
+            register();
     }
 
     public void writeToClient() throws IOException {
+        clientBuffer.copyTo(responseLog);
         clientBuffer.writeTo(clientChannel);
-        if (clientBuffer.isReadyToWrite()) register();
+        if (clientBuffer.isReadyToWrite())
+            register();
     }
 
     public void writeToServer() throws IOException {
+        serverBuffer.copyTo(requestLog);
         serverBuffer.writeTo(serverChannel);
-        if (serverBuffer.isReadyToWrite()) register();
+        if (serverBuffer.isReadyToWrite())
+            register();
     }
 
     public void register() throws ClosedChannelException {
         int clientOps = 0;
-        if (serverBuffer.isReadyToWrite()) clientOps |= SelectionKey.OP_READ;
-        if (clientBuffer.isReadyToRead()) clientOps |= SelectionKey.OP_WRITE;
+        if (serverBuffer.isReadyToWrite())
+            clientOps |= SelectionKey.OP_READ;
+        if (clientBuffer.isReadyToRead())
+            clientOps |= SelectionKey.OP_WRITE;
         clientChannel.register(selector, clientOps, this);
 
         int serverOps = 0;
-        if (clientBuffer.isReadyToWrite()) serverOps |= SelectionKey.OP_READ;
-        if (serverBuffer.isReadyToRead()) serverOps |= SelectionKey.OP_WRITE;
+        if (clientBuffer.isReadyToWrite())
+            serverOps |= SelectionKey.OP_READ;
+        if (serverBuffer.isReadyToRead())
+            serverOps |= SelectionKey.OP_WRITE;
         serverChannel.register(selector, serverOps, this);
     }
 
-    private static void closeQuietly(SocketChannel channel) {
+    private static void closeQuietly(Closeable channel) {
         if (channel != null) {
             try {
                 channel.close();
@@ -94,8 +120,8 @@ class TcpProxyConnector implements TcpServerHandler {
         try {
             clientChannel.configureBlocking(false);
 
-            final InetSocketAddress socketAddress = new InetSocketAddress(
-                    config.getRemoteHost(), config.getRemotePort());
+            final InetSocketAddress socketAddress = new InetSocketAddress(config.getRemoteHost(),
+                    config.getRemotePort());
             serverChannel = SocketChannel.open();
             serverChannel.connect(socketAddress);
             serverChannel.configureBlocking(false);
@@ -105,8 +131,8 @@ class TcpProxyConnector implements TcpServerHandler {
             destroy();
 
             if (LOGGER.isLoggable(Level.WARNING))
-                LOGGER.log(Level.WARNING, "Could not connect to "
-                        + config.getRemoteHost() + ":" + config.getRemotePort(), exception);
+                LOGGER.log(Level.WARNING,
+                        "Could not connect to " + config.getRemoteHost() + ":" + config.getRemotePort(), exception);
         }
     }
 
@@ -114,13 +140,17 @@ class TcpProxyConnector implements TcpServerHandler {
     public void process(final SelectionKey key) {
         try {
             if (key.channel() == clientChannel) {
-                if (key.isValid() && key.isReadable()) readFromClient();
-                if (key.isValid() && key.isWritable()) writeToClient();
+                if (key.isValid() && key.isReadable())
+                    readFromClient();
+                if (key.isValid() && key.isWritable())
+                    writeToClient();
             }
 
             if (key.channel() == serverChannel) {
-                if (key.isValid() && key.isReadable()) readFromServer();
-                if (key.isValid() && key.isWritable()) writeToServer();
+                if (key.isValid() && key.isReadable())
+                    readFromServer();
+                if (key.isValid() && key.isWritable())
+                    writeToServer();
             }
         } catch (final ClosedChannelException exception) {
             destroy();
@@ -139,6 +169,17 @@ class TcpProxyConnector implements TcpServerHandler {
     public void destroy() {
         closeQuietly(clientChannel);
         closeQuietly(serverChannel);
+        closeQuietly(requestLog);
+        closeQuietly(responseLog);
     }
 
+    private static OutputStream getLog(File logFile) {
+        logFile.getParentFile().mkdirs();
+        try {
+            return new FileOutputStream(logFile);
+        } catch (IOException e) {
+            LOGGER.warning(e.getMessage());
+            return null;
+        }
+    }
 }

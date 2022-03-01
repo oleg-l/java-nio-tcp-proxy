@@ -1,13 +1,19 @@
 package com.github.terma.javaniotcpproxy;
 
 public interface TcpProxyConfig {
-  int getLocalPort();
+    int getLocalPort();
 
-  int getRemotePort();
+    int getRemotePort();
 
-  String getRemoteHost();
+    String getRemoteHost();
 
-  int getWorkerCount();
+    int getWorkerCount();
 
-  void setWorkerCount(int workerCount);
+    void setWorkerCount(int workerCount);
+
+    String getLogPath();
+
+    boolean logRequest();
+
+    boolean logResponse();
 }
