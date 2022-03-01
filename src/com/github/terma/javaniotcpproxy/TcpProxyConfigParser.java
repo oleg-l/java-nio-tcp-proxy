@@ -42,7 +42,7 @@ public class TcpProxyConfigParser {
             final String remoteHost = findProperty(properties, proxyName + ".remoteHost");
             final String logPath = findProperty(properties, proxyName + ".logPath", "./log/" + proxyName);
             final boolean logRequest = findBooleanProperty(properties, proxyName + ".logRequest", false);
-            final boolean logResponse = findBooleanProperty(properties, proxyName + ".logRequest", false);
+            final boolean logResponse = findBooleanProperty(properties, proxyName + ".logResponse", false);
 
             tcpProxyConfigs.add(new StaticTcpProxyConfig(localPort, remoteHost, remotePort, logPath, logRequest, logResponse));
         }
