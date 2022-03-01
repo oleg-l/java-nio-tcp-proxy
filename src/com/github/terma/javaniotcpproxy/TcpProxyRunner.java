@@ -16,6 +16,7 @@ Copyright 2012 Artem Stasuk
 
 package com.github.terma.javaniotcpproxy;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
@@ -28,14 +29,16 @@ public class TcpProxyRunner {
     private final static Logger LOGGER = Logger.getAnonymousLogger();
 
     public static void main(final String[] args) {
-        if (args.length != 1) {
+        File configPath = new File(args.length > 0 ? args[0] : "./config.properties");
+
+        if (!configPath.exists()) {
             System.err.println("Please specify path to config file!");
             System.exit(1);
         }
 
         final Properties properties = new Properties();
         try {
-            properties.load(new FileInputStream(args[0]));
+            properties.load(new FileInputStream(configPath));
         } catch (IOException exception) {
             if (LOGGER.isLoggable(Level.SEVERE))
                 LOGGER.log(Level.SEVERE, "Can't load properties from " + args[0], exception);
